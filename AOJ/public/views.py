@@ -1,20 +1,26 @@
 from django.shortcuts import render, render_to_response, redirect
 from django.http import JsonResponse
 from problem.models import Problem
-from public.forms import SubmitAnswer, SubmitSpecificProblem
+from public.forms import SubmitAnswer, SubmitSpecificProblem, SubmitWithEditor, SubmitSpecificProblemWithEditor
 from competitive.models import Submit, Language, TestcaseOutput, TestCase
 from competitive.views import read_source_code, read_from_file
 from django.contrib.auth.decorators import login_required
 from authentication.decorators import public_auth, public_auth_and_problem_exist, admin_auth, \
         admin_jury_auth_and_submit_exist, admin_or_jury_auth, admin_jury_auth_and_contest_exist, \
-        admin_auth_and_submit_exist
+        admin_auth_and_submit_exist, admin_site_jury_auth, admin_site_jury_auth_and_contest_exist,\
+        admin_site_jury_auth_and_submit_exist
 from django.utils import timezone
-from competitive.views import judge
+from competitive.views import judge, java_class_name_find
 from public.models import Statistics
 from django.db import IntegrityError
 from authentication.models import User
 from authentication.views import check_base_site
+from contest.models import Contest
+from problem.views import update_statistics
 import math
+from django.core.files.uploadedfile import InMemoryUploadedFile
+from io import BytesIO
+import sys, os
 # Create your views here.
 
 
@@ -56,33 +62,6 @@ def public_problem_list(request):
     return render(request, 'problem_list.html', {'problem_list': problem_list})
 
 
-def update_statistics(submit):
-    try:
-        stat = Statistics.objects.get(problem=submit.problem)
-        stat.total_submissions += 1
-        if submit.result == "Correct":
-            stat.accurate_submissions += 1
-        previous = Submit.objects.filter(user=submit.user, problem=submit.problem).exclude(pk=submit.pk)
-        if not previous:
-            stat.total_users += 1
-            if submit.result == "Correct":
-                stat.accurate_users += 1
-        else:
-            if submit.result == "Correct":
-            	if not previous.filter(result="Correct"):
-            		stat.accurate_users += 1
-                # correct  = False
-                # for sub in previous:
-                #     if sub.result == "Correct":
-                #         correct = True
-                #         break
-                # if not correct:
-                    # stat.accurate_users += 1
-        stat.save()
-    except Statistics.DoesNotExist:
-        stat = Statistics(problem=submit.problem)
-        stat.save()
-
 
 @login_required
 @public_auth
@@ -114,7 +93,69 @@ def public_submit(request):
     for i in all_submits:
         i.source_code = read_source_code(i.submit_file)
         i.language_mode = i.language.editor_mode
-    return render(request, 'public_submit.html', {'form': form, 'all_submits': all_submits})
+    form1 = SubmitWithEditor()
+    form1.fields['problem'].choices = [(None, '----------')] + [(i.id, i) for i in problem_list]
+    form1.fields['language'].choices = [(None, '----------')]  + [(i.id, i) for i in Language.objects.all()]
+    return render(request, 'public_submit.html', {'form': form, 'form1': form1, 'all_submits': all_submits})
+
+
+
+@login_required
+@public_auth
+def public_submit_with_editor(request):
+    problem_list = Problem.objects.filter(is_public=True).order_by('title')
+    if request.method == "POST":
+        form1 = SubmitWithEditor(request.POST)
+        form1.fields['problem'].choices = [(None, '----------')]  + [(i.id, i) for i in problem_list]
+        form1.fields['language'].choices =[(None, '----------')]  + [(i.id, i) for i in Language.objects.all()]
+        if form1.is_valid():
+            post = Submit()
+            now = timezone.now()
+            post.submit_time = now
+            post.user = request.user
+            lang = Language.objects.get(pk=int(request.POST['language']))
+            post.language = lang
+            pro =  Problem.objects.get(pk=int(request.POST['problem']))
+            post.problem = pro
+            post.submit_file = None
+            post.save()
+
+            source = request.POST['source']
+            path = pro.title + '_' + str(request.user.id) + '_' + str(now) +'.' + lang.extension
+            path = path.replace(' ', '').replace('/', '')
+
+            if lang.name == 'Java':
+                    path = java_class_name_find(source, path)
+
+            code = open(path, 'w')
+            code.write(source)
+            code.close()
+            code = open(path, 'rb')
+            source_code = code.read()
+            code.close()
+            submit_file = InMemoryUploadedFile(BytesIO(source_code), 'file', path, 'file/text', sys.getsizeof(source_code), None)
+            post.submit_file = submit_file
+            post.save()
+            result = judge(file_name=post.submit_file.path,
+                           problem=post.problem, language=post.language, submit=post)
+            post.result = result
+            post.save()
+            os.system(f'rm "{path}"')
+            update_statistics(post)
+            return redirect('public_submit')
+    else:
+        form1 = SubmitWithEditor()
+        form1.fields['problem'].choices = [(None, '----------')]  +  [(i.id, i) for i in problem_list]
+        form1.fields['language'].choices = [(None, '----------')]  + [(i.id, i) for i in Language.objects.all()]
+
+    all_submits = Submit.objects.filter(
+        user=request.user).order_by('submit_time').reverse()
+    for i in all_submits:
+        i.source_code = read_source_code(i.submit_file)
+        i.language_mode = i.language.editor_mode
+    form = SubmitAnswer()
+    form.fields['problem'].queryset = problem_list
+    return render(request, 'public_submit.html', {'form': form, 'form1':form1, 'all_submits': all_submits})
 
 
 @login_required
@@ -147,7 +188,67 @@ def submit_specific_problem(request, problem_id):
     for i in all_submits:
         i.source_code = read_source_code(i.submit_file)
         i.language_mode = i.language.editor_mode
-    return render(request, 'public_specific_problem_submit.html', {'form': form, 'all_submits': all_submits, 'problem_id': problem_id})
+
+    form1 = SubmitSpecificProblemWithEditor(initial=initial_info)
+    form1.fields['language'].choices = [(None, '----------')]  + [(i.id, i) for i in Language.objects.all()]
+
+    return render(request, 'public_specific_problem_submit.html', {'form': form, 'form1': form1, 'problem': problem, 'all_submits': all_submits})
+
+
+
+@login_required
+@public_auth
+def submit_specific_problem_with_editor(request, problem_id):
+    problem = Problem.objects.get(pk=problem_id)
+    initial_info = {'specific_problem': problem.title}
+    if request.method == "POST":
+        form1 = SubmitSpecificProblemWithEditor(request.POST, initial=initial_info)
+        form1.fields['language'].choices =[(None, '----------')]  + [(i.id, i) for i in Language.objects.all()]
+        if form1.is_valid():
+            post = Submit()
+            now = timezone.now()
+            post.submit_time = now
+            post.user = request.user
+            lang = Language.objects.get(pk=int(request.POST['language']))
+            post.language = lang
+            post.problem = problem
+            post.submit_file = None
+            post.save()
+
+            path = problem.title + '_' + str(request.user.id) + '_' + str(now) +'.' + lang.extension
+            path = path.replace(' ', '').replace('/', '')
+
+            source = request.POST['source']
+            if lang.name == 'Java':
+                path = java_class_name_find(source, path)
+                
+            code = open(path, 'w')
+            code.write(source)
+            code.close()
+            code = open(path, 'rb')
+            source_code = code.read()
+            code.close()
+            submit_file = InMemoryUploadedFile(BytesIO(source_code), 'file', path, 'file/text', sys.getsizeof(source_code), None)
+            post.submit_file = submit_file
+            post.save()
+            result = judge(file_name=post.submit_file.path,
+                           problem=post.problem, language=post.language, submit=post)
+            post.result = result
+            post.save()
+            os.system(f'rm "{path}"')
+            update_statistics(post)
+            return redirect('submit_specific_problem', problem_id)
+    else:
+        form1 = SubmitSpecificProblemWithEditor(initial=initial_info)
+        form1.fields['language'].choices = [(None, '----------')]  + [(i.id, i) for i in Language.objects.all()]
+
+    all_submits = Submit.objects.filter(
+        user=request.user).order_by('submit_time').reverse()
+    for i in all_submits:
+        i.source_code = read_source_code(i.submit_file)
+        i.language_mode = i.language.editor_mode
+    form = SubmitSpecificProblem(initial=initial_info)
+    return render(request, 'public_specific_problem_submit.html', {'form': form, 'form1':form1, 'problem': problem, 'all_submits': all_submits})
 
 
 # @login_required
@@ -198,161 +299,8 @@ def submit_specific_problem(request, problem_id):
 #     return JsonResponse(response_data, content_type="application/json")
 
 
-def create_statistics(problem):
-    try:
-        problem = Statistics(problem=problem)
-        problem.save()
-    except IntegrityError:
-        pass
-
-
-def university_ranklists():
-    statistics = Statistics.objects.filter(is_active=True)
-    active_problem = {stat.problem: stat for stat in statistics}
-    user_list = User.objects.filter(role__short_name="public")
-    university_list = set([user.campus for user in user_list])
-    university_user_list_dict = {campus: [] for campus in university_list}
-    university_dict = {campus.id: campus for campus in university_list}
-    for user in user_list:
-        university_user_list_dict[user.campus].append(user)
-
-    rating_list = list()
-    for campus in university_user_list_dict:
-        user_list = university_user_list_dict[campus]
-        univ_rate = 0.0
-        for user in user_list:
-            problem = set()
-            submit_list = Submit.objects.filter(user=user, result="Correct")
-            for sub in submit_list:
-                problem.add(sub.problem)
-            user_rate = 0.0
-            for pro in problem:
-                if not pro in active_problem:
-                    continue
-                user_rate += difficulty(active_problem[pro])
-            univ_rate += user_rate
-        rating_list.append([round(univ_rate, 1), campus.id, len(user_list)])
-
-    rating_list.sort(reverse=True)
-
-    if rating_list:
-        rating_list[0].append(1)
-    for i in range(1, len(rating_list)):
-        if rating_list[i][0] == rating_list[i-1][0]:
-            rating_list[i].append('')
-        else:
-            rating_list[i].append(i+1)
-
-    university_ranklists = list()
-    for i in rating_list:
-        univ_rank = {'rank': i[-1], 'university': university_dict[i[1]],
-                     'user_count': i[2],  'point': i[0]}
-        university_ranklists.append(univ_rank)
-    return university_ranklists
-
-
-def country_ranklists():
-    statistics = Statistics.objects.filter(is_active=True)
-    active_problem = {stat.problem: stat for stat in statistics}
-    user_list = User.objects.filter(role__short_name="public")
-    country_list = set([user.campus.country for user in user_list])
-    country_user_list_dict = {country: [] for country in country_list}
-    for user in user_list:
-        country_user_list_dict[user.campus.country].append(user)
-
-    rating_list = list()
-    for country in country_user_list_dict:
-        user_list = country_user_list_dict[country]
-        country_rate = 0.0
-        university_set = set()
-        for user in user_list:
-            university_set.add(user.campus)
-            problem = set()
-            submit_list = Submit.objects.filter(user=user, result="Correct")
-            for sub in submit_list:
-                problem.add(sub.problem)
-
-            user_rate = 0.0
-            for pro in problem:
-                if not pro in active_problem:
-                    continue
-                user_rate += difficulty(active_problem[pro])
-            country_rate += user_rate
-        rating_list.append([round(country_rate, 1), country,
-                            len(user_list), len(university_set)])
-
-    rating_list.sort(reverse=True)
-
-    if rating_list:
-        rating_list[0].append(1)
-    for i in range(1, len(rating_list)):
-        if rating_list[i][0] == rating_list[i-1][0]:
-            rating_list[i].append('')
-        else:
-            rating_list[i].append(i+1)
-
-    country_ranklists = list()
-    for i in rating_list:
-        country_rank = {'rank': i[-1], 'country': i[1],
-                        'user_count': i[2], 'university_count': i[3], 'point': i[0]}
-        country_ranklists.append(country_rank)
-    return country_ranklists
-
-
-def user_ranklists():
-    statistics = Statistics.objects.filter(is_active=True)
-    active_problem = {i.problem: i for i in statistics}
-    user_list = User.objects.filter(role__short_name="public")
-    user_dict = {i.id: i for i in user_list}
-    rating_list = list()
-    for user in user_list:
-        problem = set()
-        submit_list = Submit.objects.filter(user=user, result="Correct")
-        for sub in submit_list:
-            problem.add(sub.problem)
-        rate = 0.0
-        for pro in problem:
-            if not pro in active_problem:
-                continue
-            rate += difficulty(active_problem[pro])
-        rating_list.append([round(rate, 1), user.id])
-
-    rating_list.sort(reverse=True)
-
-    if rating_list:
-        rating_list[0].append(1)
-    for i in range(1, len(rating_list)):
-        if rating_list[i][0] == rating_list[i-1][0]:
-            rating_list[i].append('')
-        else:
-            rating_list[i].append(i+1)
-
-    user_ranklists = list()
-    for i in rating_list:
-        user_rank = {'rank': i[-1], 'user': user_dict[i[1]], 'point': i[0]}
-        user_ranklists.append(user_rank)
-    return user_ranklists
-
-
 @login_required
-@public_auth
-def ranklists(request):
-    user_rank = user_ranklists()
-    university_rank = university_ranklists()
-    country_rank = country_ranklists()
-
-    return render(request, 'ranklists.html',
-                  {
-                      'user_ranklists': user_rank,
-                      'university_ranklists': university_rank,
-                      'country_ranklists': country_rank
-                  }
-                  )
-
-
-
-@login_required
-@admin_or_jury_auth
+@admin_site_jury_auth
 def public_user_submission(request):
     
     submission_list = Submit.objects.filter(user__role__short_name='public').order_by('submit_time').reverse()
@@ -366,7 +314,7 @@ def public_user_submission(request):
 
 
 @login_required
-@admin_or_jury_auth
+@admin_site_jury_auth
 def public_view_submission_filter(request):
     problem_id = int(request.GET.get('problem_id'))
     try:
@@ -383,7 +331,7 @@ def public_view_submission_filter(request):
 
 
 @login_required
-@admin_jury_auth_and_submit_exist
+@admin_site_jury_auth_and_submit_exist
 def public_submission_detail(request, submit_id):
     submit = Submit.objects.get(pk=submit_id)
 
@@ -587,11 +535,17 @@ def public_single_rejudge(request, submit_id):
 
 @login_required
 @admin_auth
-def public_multi_rejudge(request, problem_id, user_id):
+def public_multi_rejudge(request, problem_id, contest_id, user_id):
+    try:
+        current_contest = Contest.objects.get(pk=contest_id)
+    except Contest.DoesNotExist:
+        return redirect('homepage')
+
     submit = Submit.objects.filter(contest_id=contest_id, problem_id=problem_id, user_id=user_id,
                                    submit_time__gte=current_contest.start_time, submit_time__lte=current_contest.end_time).order_by('submit_time')
     if not submit:
         return redirect('homepage')
+    
     specific_submissions = list()
     for i in submit:
         if i.result == 'Correct':

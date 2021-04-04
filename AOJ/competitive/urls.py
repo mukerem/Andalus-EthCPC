@@ -21,9 +21,8 @@ urlpatterns = [
     path('rejudge/contest-select/', views.rejudge_contest_select, name='rejudge_contest_select'),
     path('rejudge/submission-list/<int:contest_id>/', views.rejudge_submission_list, name='rejudge_submission_list'),
     path('rejudge/process/', views.ajax_rejudge, name='ajax_rejudge'),
-    path('rating/', views.rating, name='rating'),
     path('view-result/<int:contest_id>/', views.deactivate_contest_scoreboard, name='deactivate_contest_scoreboard'),
-
+    path('submit-editor/', views.public_submit_editor, name='public_submit_editor'),
 ]
 
 

@@ -1,7 +1,8 @@
 from django.shortcuts import render, render_to_response, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-from authentication.decorators import admin_auth, admin_auth_and_user_exist, admin_auth_and_campus_exist, jury_auth, contestant_auth
+from authentication.decorators import admin_auth, admin_auth_and_user_exist, admin_auth_and_campus_exist,\
+    jury_auth, contestant_auth, admin_site_jury_auth, public_auth, public_auth_and_problem_exist
 from authentication.models import User, Role, Campus
 from django.contrib import messages
 from django.contrib.auth import login, authenticate
@@ -17,7 +18,8 @@ from django.views.generic import CreateView
 from authentication.forms import PublicUserRegistrationForm, EditMyProfile, EditUserProfile, AddUser,\
     CSVUserUpload, ChangePassword, EditCampus, CampusRegister
 from django.contrib.auth.forms import AuthenticationForm
-
+from public.models import Statistics
+from competitive.models import Submit
 
 # Create your views here.
 def index(request):
@@ -37,6 +39,8 @@ def check_base_site(request):
         base = 'contestant_base_site.html'
     elif request.user.role.short_name == 'public':
         base = 'public_base_site.html'
+    elif request.user.role.short_name == 'site':
+        base = 'site_base_site.html'
 
     return base
 
@@ -48,6 +52,9 @@ def homepage(request):
     elif request.user.role.short_name == 'admin':
         create_contest_session_admin(request)
         return render(request, 'admin_index.html', {'myicpc': 'hover'})
+    elif request.user.role.short_name == 'site':
+        create_contest_session_admin(request)
+        return render(request, 'site_index.html', {'myicpc': 'hover'})
     elif request.user.role.short_name == 'jury':
         create_contest_session_admin(request)
         return render(request, 'jury_index.html')
@@ -135,6 +142,8 @@ def user_list(request):
         role__short_name="contestant").order_by('username')
     admin_user = User.objects.filter(
         role__short_name="admin").order_by('username')
+    site_admin_user = User.objects.filter(
+        role__short_name="site").order_by('username')
     jury_user = User.objects.filter(
         role__short_name="jury").order_by('username')
     public_user = User.objects.filter(
@@ -229,7 +238,7 @@ def validate_data(request, username, name, email, line_number):
         messages.error(request, "invalid name for user " + username)
         return 0
 
-    if email and not email_validate(email):
+    if not email_validate(email):
         messages.error(request, "invalid email for user " + username)
         return 0
 
@@ -331,7 +340,7 @@ def generate_users_password_csv(request, total_users):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="User Password Generate.csv"'
     writer = csv.writer(response)
-    writer.writerow(['#', 'Username', 'Name', 'Role', 'Password'])
+    writer.writerow(['#', 'Username', 'Name', 'Email', 'Role', 'Password'])
     for user in total_users:
         writer.writerow(user)
     return response
@@ -356,7 +365,7 @@ def generate_password_done(request, role_id):
         secret_key = get_random_string(6, chars)
         user.set_password(secret_key)
         user.save()
-        total_users.append((count, user.username, user.name,
+        total_users.append((count, user.username, user.name, user.email,
                             user.role.role, secret_key))
         count += 1
     excel = generate_users_password_csv(request, total_users)
@@ -427,3 +436,199 @@ def campus_register(request):
     else:
         form = CampusRegister()
     return render(request, 'campus_register.html', {'form': form})
+
+
+
+
+@login_required
+# @admin_or_jury_auth
+@admin_site_jury_auth
+def rating(request):
+    user_rating = User.objects.filter(
+        role__short_name='contestant', rating__gt=0).order_by('rating').reverse()
+
+    user_rank = [[rank + 1, row] for rank, row in enumerate(user_rating)]
+    for i in range(1, len(user_rank)):
+        if user_rank[i-1][1].rating == user_rank[i][1].rating:
+            user_rank[i][0] = ''
+
+    base_page = check_base_site(request)
+    context = {
+        "user_rank": user_rank,
+        "base_page": base_page,
+        'rating': 'hover'
+    }
+    return render(request, 'rating.html', context)
+
+
+
+def difficulty(statistics):
+    try:
+        ratio = 8.9 * \
+            float(statistics.accurate_submissions) / \
+            statistics.total_submissions
+    except ZeroDivisionError:
+        ratio = 8.9
+    difficulty = round(9.9 - ratio, 1)
+    return difficulty
+
+
+def university_ranklists(role):
+    statistics = Statistics.objects.filter(is_active=True)
+    active_problem = {stat.problem: stat for stat in statistics}
+    user_list = User.objects.filter(role__short_name=role)
+    university_list = set([user.campus for user in user_list])
+    university_user_list_dict = {campus: [] for campus in university_list}
+    university_dict = {campus.id: campus for campus in university_list}
+    for user in user_list:
+        university_user_list_dict[user.campus].append(user)
+
+    rating_list = list()
+    for campus in university_user_list_dict:
+        user_list = university_user_list_dict[campus]
+        univ_rate = 0.0
+        for user in user_list:
+            problem = set()
+            submit_list = Submit.objects.filter(user=user, result="Correct")
+            for sub in submit_list:
+                problem.add(sub.problem)
+            user_rate = 0.0
+            for pro in problem:
+                if not pro in active_problem:
+                    continue
+                user_rate += difficulty(active_problem[pro])
+            univ_rate += user_rate
+        rating_list.append([round(univ_rate, 1), campus.id, len(user_list)])
+
+    rating_list.sort(reverse=True)
+
+    if rating_list:
+        rating_list[0].append(1)
+    for i in range(1, len(rating_list)):
+        if rating_list[i][0] == rating_list[i-1][0]:
+            rating_list[i].append('')
+        else:
+            rating_list[i].append(i+1)
+
+    university_ranklists = list()
+    for i in rating_list:
+        univ_rank = {'rank': i[-1], 'university': university_dict[i[1]],
+                     'user_count': i[2],  'point': i[0]}
+        university_ranklists.append(univ_rank)
+    return university_ranklists
+
+
+def country_ranklists(role):
+    statistics = Statistics.objects.filter(is_active=True)
+    active_problem = {stat.problem: stat for stat in statistics}
+    user_list = User.objects.filter(role__short_name=role)
+    country_list = set([user.campus.country for user in user_list])
+    country_user_list_dict = {country: [] for country in country_list}
+    for user in user_list:
+        country_user_list_dict[user.campus.country].append(user)
+
+    rating_list = list()
+    for country in country_user_list_dict:
+        user_list = country_user_list_dict[country]
+        country_rate = 0.0
+        university_set = set()
+        for user in user_list:
+            university_set.add(user.campus)
+            problem = set()
+            submit_list = Submit.objects.filter(user=user, result="Correct")
+            for sub in submit_list:
+                problem.add(sub.problem)
+
+            user_rate = 0.0
+            for pro in problem:
+                if not pro in active_problem:
+                    continue
+                user_rate += difficulty(active_problem[pro])
+            country_rate += user_rate
+        rating_list.append([round(country_rate, 1), country,
+                            len(user_list), len(university_set)])
+
+    rating_list.sort(reverse=True)
+
+    if rating_list:
+        rating_list[0].append(1)
+    for i in range(1, len(rating_list)):
+        if rating_list[i][0] == rating_list[i-1][0]:
+            rating_list[i].append('')
+        else:
+            rating_list[i].append(i+1)
+
+    country_ranklists = list()
+    for i in rating_list:
+        country_rank = {'rank': i[-1], 'country': i[1],
+                        'user_count': i[2], 'university_count': i[3], 'point': i[0]}
+        country_ranklists.append(country_rank)
+    return country_ranklists
+
+
+def user_ranklists(role):
+    statistics = Statistics.objects.filter(is_active=True)
+    active_problem = {i.problem: i for i in statistics}
+    user_list = User.objects.filter(role__short_name=role)
+    user_dict = {i.id: i for i in user_list}
+    rating_list = list()
+    for user in user_list:
+        problem = set()
+        submit_list = Submit.objects.filter(user=user, result="Correct")
+        for sub in submit_list:
+            problem.add(sub.problem)
+        rate = 0.0
+        for pro in problem:
+            if not pro in active_problem:
+                continue
+            rate += difficulty(active_problem[pro])
+        rating_list.append([round(rate, 1), user.id])
+
+    rating_list.sort(reverse=True)
+
+    if rating_list:
+        rating_list[0].append(1)
+    for i in range(1, len(rating_list)):
+        if rating_list[i][0] == rating_list[i-1][0]:
+            rating_list[i].append('')
+        else:
+            rating_list[i].append(i+1)
+
+    user_ranklists = list()
+    for i in rating_list:
+        user_rank = {'rank': i[-1], 'user': user_dict[i[1]], 'point': i[0]}
+        user_ranklists.append(user_rank)
+    return user_ranklists
+
+
+@login_required
+@public_auth
+def ranklists(request):
+    user_rank = user_ranklists("public")
+    university_rank = university_ranklists("public")
+    country_rank = country_ranklists("public")
+
+    return render(request, 'ranklists.html',
+                  {
+                      'user_ranklists': user_rank,
+                      'university_ranklists': university_rank,
+                      'country_ranklists': country_rank
+                  }
+                  )
+
+@login_required
+@admin_site_jury_auth
+def leaderboard(request):
+    user_rank = user_ranklists("contestant")
+    university_rank = university_ranklists("contestant")
+    country_rank = country_ranklists("contestant")
+    base_page = check_base_site(request)
+    return render(request, 'leaderboard.html',
+                  {
+                      'user_ranklists': user_rank,
+                      'university_ranklists': university_rank,
+                      'country_ranklists': country_rank,
+                      'base_page': base_page,
+                      'leaderboard': 'hover'
+                  }
+                  )

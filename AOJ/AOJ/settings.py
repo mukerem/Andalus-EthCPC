@@ -21,8 +21,8 @@ MEDIA_URL = '/media/'
 
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
-EMAIL_HOST_USER = 'rapiandelus@gmail.com'
-EMAIL_HOST_PASSWORD = '********'
+EMAIL_HOST_USER = 'ethcpc1@gmail.com'
+EMAIL_HOST_PASSWORD = 'andalus887@ethcpc'
 EMAIL_USE_TLS = True
 
 # Quick-start development settings - unsuitable for production
@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'control',
     'jury',
     'public',
+    'site_admin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -108,7 +109,7 @@ DATABASES = {
     'default': {
 
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'andalus',
+        'NAME': 'ethcpc2',
         'USER': 'postgres',
         'PASSWORD': 'andalus',
         'HOST': '127.0.0.1',

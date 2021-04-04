@@ -26,7 +26,9 @@
             </table>
         </div>
         <div class="col-sm-7 col-centered" style="margin-top: 2em;">
-            {% if base_page == "admin_base_site.html" %}
+            {% if site_admin_permission %}
+                <a class="btn btn-success" href="{% url 'site_multi_rejudge' submit.0.problem.id contest_id submit.0.user.id %}" style="float: right; width: 200px;color:#fff;">all rejudge</a>
+            {% elif base_page == "admin_base_site.html" %}
                 <a class="btn btn-success" href="{% url 'multi_rejudge' submit.0.problem.id contest_id submit.0.user.id %}" style="float: right; width: 200px;color:#fff;">all rejudge</a>
             {% endif %}
             <table class="table table-striped" style="margin-top: 4em;"> 

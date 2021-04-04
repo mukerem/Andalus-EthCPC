@@ -28,6 +28,7 @@ urlpatterns = [
     path('jury/', include('jury.urls')),
     path('public/', include('public.urls')),
     path('control/', include('control.urls')),
+    path('site/', include('site_admin.urls')),
 
 ]
 

@@ -3,13 +3,14 @@ from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from authentication.decorators import contestant_auth, admin_auth, admin_auth_and_submit_exist,\
     admin_auth_and_contest_exist, admin_or_jury_auth, admin_jury_auth_and_contest_exist,\
-    admin_jury_auth_and_submit_exist
+    admin_jury_auth_and_submit_exist, admin_site_jury_auth, admin_site_jury_auth_and_contest_exist,\
+    admin_site_jury_auth_and_submit_exist
 from django.db import IntegrityError
 from django.core.files import File
 from contest.models import Contest
 from django.utils import timezone
 from django.contrib import messages
-from .forms import SubmitAnswer
+from .forms import SubmitAnswer, SubmitWithEditor
 from .models import Language, Submit, TestcaseOutput, ScorecacheJury, ScorecachePublic, RankcacheJury, RankcachePublic
 from problem.models import TestCase, Problem
 from control.models import Setting
@@ -27,6 +28,9 @@ import subprocess
 import sys
 from threading import Timer
 import multiprocessing
+from django.core.files.uploadedfile import InMemoryUploadedFile
+from io import BytesIO
+from problem.views import update_statistics
 # from asgiref.sync import async_to_sync
 
 from contest.views import rank_update_unfrozen, create_contest_session_admin, create_contest_session_contestant,\
@@ -283,7 +287,10 @@ def judge(file_name, problem, language, submit, rejudge=False):
 
 
 def read_source_code(files):
-    files.open(mode='r')
+    try:
+        files.open(mode='r')  
+    except (FileNotFoundError, ValueError):
+        return "FileNotFoundError\nNo such file or directory"
     try:
         file_list = files.readlines()
     except UnicodeDecodeError:
@@ -316,6 +323,31 @@ def read_from_file(files):
         submit_file += "\n..."
     # print(files, file_list)
     return submit_file
+
+
+def java_class_name_find(source, path):
+
+    ind  = source.find('public static void main')
+    if ind == -1:
+        return path
+
+    text = source[:ind]
+    ind  = text.rfind('class')
+    if ind == -1:
+        return path
+
+    text = text[ind + len('class'):]
+
+    ind1  = text.find('{')
+    if ind == -1:
+        return path
+
+    class_name = text[:ind1]
+    class_name = class_name.replace(' ', '')
+
+    if not class_name:
+        return path
+    return class_name+'.java'
 
 
 def rank_update(submit):
@@ -406,6 +438,7 @@ def rank_update(submit):
 @login_required
 @contestant_auth
 # @async_to_sync
+#   TODO: add a text editor to submit
 def submit(request):
     refresh_contest_session_contestant(request)  # refersh the contest session
     current_contest_id = request.session.get('start_contest_contestant')
@@ -432,10 +465,6 @@ def submit(request):
                 post.submit_file = request.FILES.get('submit_file')
                 post.save()
 
-                # multiprocessing
-                # pool = multiprocessing.Pool(processes=4)
-                # pool.map(judge(file_name=post.submit_file.path, problem=post.problem, language=post.language, submit=post), request)
-
                 result = judge(file_name=post.submit_file.path,
                                problem=post.problem, language=post.language, submit=post)
                 post.result = result
@@ -445,22 +474,135 @@ def submit(request):
                 this_contest.save()
 
                 rank_update(post)
-                # output_files = TestcaseOutput.objects.filter(submit = post)
-                # for i in output_files:
-                #     if i.result == "Correct":
-                #         continue
-                #     else:
-                #         if i.output_file.size > 2 * i.test_case.output.size:
-                #             os.system('rm '+i.output_file.path)
-                #             os.system('touch '+i.output_file.path)
-                # if this_contest.has_value:
-                #     give_score(post, request)
+                update_statistics(post)
                 return redirect('submit')
         else:
             form = SubmitAnswer()
             form.fields['problem'].queryset = problem_list
+        
+        form1 = SubmitWithEditor()
+        form1.fields['problem'].choices = [(None, '----------')] + [(i.id, i) for i in problem_list]
+        form1.fields['language'].choices = [(None, '----------')]  + [(i.id, i) for i in Language.objects.all()]
+
     else:
         form = None
+        form1 = None
+
+    q = Q(problem=None)
+    if current_contest:
+        for pro in current_contest.problem.all():
+            q = q | Q(problem=pro)
+        all_current_contest_submits = Submit.objects.filter(
+            q, contest_id=current_contest_id, user=request.user).order_by('submit_time').reverse()
+        start_time = current_contest.start_time
+        for i in all_current_contest_submits:
+            if i.submit_time > current_contest.end_time:
+                i.result = 'Too Late'
+            i.contest_time = i.submit_time - start_time
+            i.source_code = read_source_code(i.submit_file)
+            i.language_mode = i.language.editor_mode
+
+        a = [i for i in all_current_contest_submits]
+        ls = []
+        for i in a:
+            ls.append((i.pk, str(i.submit_file)))
+    else:
+        all_current_contest_submits = None
+        ls = []
+    qs_json = json.dumps(ls)
+
+    try:
+        active_contest = Contest.objects.get(pk=request.session.get(
+            'active_contest_contestant'), active_time__lte=timezone.now(), enable=True)
+        contest_title = active_contest.title
+        start_time = active_contest.start_time
+    except Contest.DoesNotExist:
+        contest_title = None
+        start_time = None
+    
+    return render(request, 'submit.html',
+                  {'form': form, 'form1': form1, 'all_current_contest_submits': all_current_contest_submits,
+                   'current_contest': current_contest, 'qs_json': qs_json,
+                   'contest_title': contest_title, 'start_time': start_time, 'submit': 'hover'
+                   }
+                  )
+
+
+
+
+@login_required
+@contestant_auth
+def public_submit_editor(request):
+
+    refresh_contest_session_contestant(request)  # refersh the contest session
+    current_contest_id = request.session.get('start_contest_contestant')
+    problem_list = None
+    all_current_contest_submits = []
+    try:
+        current_contest = Contest.objects.get(
+            pk=current_contest_id, start_time__lte=timezone.now(), enable=True)
+    except Contest.DoesNotExist:
+        current_contest = None
+    if current_contest:
+        problem_list = current_contest.problem.all().order_by('short_name')
+        if request.method == "POST":
+            form1 = SubmitWithEditor(request.POST, request.FILES)
+            form1.fields['problem'].choices = [(None, '----------')] + [(i.id, i) for i in problem_list]
+            form1.fields['language'].choices = [(None, '----------')]  + [(i.id, i) for i in Language.objects.all()]
+
+            if form1.is_valid():
+                post = Submit()
+                now = timezone.now()
+                post.submit_time = now
+                post.user = request.user
+                post.contest_id = current_contest_id
+                lang = Language.objects.get(pk=int(request.POST['language']))
+                post.language = lang
+                pro =  Problem.objects.get(pk=int(request.POST['problem']))
+                post.problem = pro
+                post.submit_file = None
+                post.save()
+
+                source = request.POST['source']
+                path = pro.title + '_' + str(request.user.id) + '_' + str(now) +'.' + lang.extension
+                path = path.replace(' ', '').replace('/', '')
+
+                if lang.name == 'Java':
+                    path = java_class_name_find(source, path)
+
+                code = open(path, 'w')
+                code.write(source)
+                code.close()
+                # print(source)
+                code = open(path, 'rb')
+                source_code = code.read()
+                code.close()
+                submit_file = InMemoryUploadedFile(BytesIO(source_code), 'file', path, 'file/text', sys.getsizeof(source_code), None)
+                post.submit_file = submit_file
+                post.save()
+                
+                result = judge(file_name=post.submit_file.path,
+                               problem=post.problem, language=post.language, submit=post)
+                post.result = result
+                post.save()
+                this_contest = post.contest
+                this_contest.last_update = timezone.now()
+                this_contest.save()
+                os.system(f'rm "{path}"')
+                rank_update(post)
+                update_statistics(post)
+                return redirect('submit')
+        else:
+            form1 = SubmitWithEditor()
+            form1.fields['problem'].choices = [(None, '----------')] + [(i.id, i) for i in problem_list]
+            form1.fields['language'].choices = [(None, '----------')]  + [(i.id, i) for i in Language.objects.all()]
+
+        form = SubmitAnswer()
+        form.fields['problem'].queryset = problem_list
+        
+    else:
+        form = None
+        form1 = None
 
     q = Q(problem=None)
     if current_contest:
@@ -495,11 +637,65 @@ def submit(request):
         start_time = None
 
     return render(request, 'submit.html',
-                  {'form': form, 'all_current_contest_submits': all_current_contest_submits,
+                  {'form': form, 'form1': form1, 'all_current_contest_submits': all_current_contest_submits,
                    'current_contest': current_contest, 'qs_json': qs_json,
                    'contest_title': contest_title, 'start_time': start_time, 'submit': 'hover'
                    }
                   )
+
+    ################################
+    problem_list = Problem.objects.filter(is_public=True).order_by('title')
+    if request.method == "POST":
+        form1 = SubmitWithEditor(request.POST)
+        form1.fields['problem'].choices = [(None, '----------')]  + [(i.id, i) for i in problem_list]
+        form1.fields['language'].choices =[(None, '----------')]  + [(i.id, i) for i in Language.objects.all()]
+        if form1.is_valid():
+            # print(123)
+            post = Submit()
+            now = timezone.now()
+            post.submit_time = now
+            post.user = request.user
+            lang = Language.objects.get(pk=int(request.POST['language']))
+            post.language = lang
+            pro =  Problem.objects.get(pk=int(request.POST['problem']))
+            post.problem = pro
+            post.submit_file = None
+            post.save()
+
+            source = request.POST['source']
+            path = pro.title + request.user.username + str(now) +'.' + lang.extension
+            code = open(path, 'w')
+            code.write(source)
+            code.close()
+            # print(source)
+            code = open(path, 'rb')
+            source_code = code.read()
+            code.close()
+            submit_file = InMemoryUploadedFile(BytesIO(source_code), 'file', path, 'file/text', sys.getsizeof(source_code), None)
+            post.submit_file = submit_file
+            post.save()
+            # print(post.submit_file)
+            result = judge(file_name=post.submit_file.path,
+                           problem=post.problem, language=post.language, submit=post)
+            post.result = result
+            # print(result)
+            post.save()
+            os.system(f'rm "{path}"')
+            update_statistics(post)
+            return redirect('public_submit')
+    else:
+        form1 = SubmitWithEditor()
+        form1.fields['problem'].choices = [(None, '----------')]  +  [(i.id, i) for i in problem_list]
+        form1.fields['language'].choices = [(None, '----------')]  + [(i.id, i) for i in Language.objects.all()]
+
+    all_submits = Submit.objects.filter(
+        user=request.user).order_by('submit_time').reverse()
+    for i in all_submits:
+        i.source_code = read_source_code(i.submit_file)
+        i.language_mode = i.language.editor_mode
+    form = SubmitAnswer()
+    form.fields['problem'].queryset = problem_list
+    return render(request, 'submit.html', {'form': form, 'form1':form1, 'all_submits': all_submits})
 
 
 def scoreboard_summary(contest, scoreboard_type):
@@ -852,7 +1048,7 @@ def ajax_get_language_list(request):
 
 
 @login_required
-@admin_or_jury_auth
+@admin_site_jury_auth
 def jury_scoreboard(request):
     refresh_contest_session_admin(request)
     now = timezone.now()
@@ -904,7 +1100,7 @@ def jury_scoreboard(request):
 
 
 @login_required
-@admin_or_jury_auth
+@admin_site_jury_auth
 def jury_scoreboard_refresh(request):
     refresh_contest_session_admin(request)
     now = timezone.now()
@@ -949,7 +1145,7 @@ def jury_scoreboard_refresh(request):
 
 
 @login_required
-@admin_or_jury_auth
+@admin_site_jury_auth
 def deactivate_contest_scoreboard(request, contest_id):
     refresh_contest_session_admin(request)
     now = timezone.now()
@@ -968,7 +1164,8 @@ def deactivate_contest_scoreboard(request, contest_id):
 
 
 @login_required
-@admin_or_jury_auth
+# @admin_or_jury_auth
+@admin_site_jury_auth
 def view_submit_contest_select(request):
     now = timezone.now()
     refresh_contest_session_admin(request)  # refersh the contest session
@@ -997,7 +1194,7 @@ def view_submit_contest_select(request):
 
 
 @login_required
-@admin_jury_auth_and_contest_exist
+@admin_site_jury_auth_and_contest_exist
 def view_submissions(request, contest_id):
     refresh_contest_session_admin(request)  # refersh the contest session
     contest = Contest.objects.get(pk=contest_id)
@@ -1020,7 +1217,8 @@ def view_submissions(request, contest_id):
 
 
 @login_required
-@admin_or_jury_auth
+# @admin_or_jury_auth
+@admin_site_jury_auth
 def view_submission_filter(request):
     refresh_contest_session_admin(request)  # refersh the contest session
     problem_id = int(request.GET.get('problem_id'))
@@ -1044,7 +1242,7 @@ def view_submission_filter(request):
 
 
 @login_required
-@admin_jury_auth_and_submit_exist
+@admin_site_jury_auth_and_submit_exist
 def submission_detail(request, submit_id):
     refresh_contest_session_admin(request)  # refersh the contest session
     submit = Submit.objects.get(pk=submit_id)
@@ -1155,27 +1353,8 @@ def submission_detail(request, submit_id):
 
 
 @login_required
-@admin_or_jury_auth
-def rating(request):
-    user_rating = User.objects.filter(
-        role__short_name='contestant', rating__gt=0).order_by('rating').reverse()
-
-    user_rank = [[rank + 1, row] for rank, row in enumerate(user_rating)]
-    for i in range(1, len(user_rank)):
-        if user_rank[i-1][1].rating == user_rank[i][1].rating:
-            user_rank[i][0] = ''
-
-    base_page = check_base_site(request)
-    context = {
-        "user_rank": user_rank,
-        "base_page": base_page,
-        'rating': 'hover'
-    }
-    return render(request, 'rating.html', context)
-
-
-@login_required
-@admin_or_jury_auth
+# @admin_or_jury_auth
+@admin_site_jury_auth
 def specific_problem_submission(request):
     problem_id = request.GET.get('problem_id')
     user_id = request.GET.get('user_id')
@@ -1186,6 +1365,10 @@ def specific_problem_submission(request):
                                                               submit_time__gte=current_contest.start_time, submit_time__lte=current_contest.end_time).order_by('submit_time')
     correct = False
     specific_submissions = list()
+    if current_contest.created_by == request.user.campus:
+        site_admin_permission = True
+    else:
+        site_admin_permission = False
     for submissions in this_problem_and_user_submissions:
         if correct:
             break
@@ -1200,8 +1383,13 @@ def specific_problem_submission(request):
         i.contest_time = i.submit_time - start_time
 
     base_page = check_base_site(request)
-
-    return render(request, 'specific_problem_submission.html', {'submit': specific_submissions, 'contest_id': contest_id, 'base_page': base_page})
+    context = {
+        'submit': specific_submissions, 
+        'contest_id': contest_id, 
+        'site_admin_permission': site_admin_permission,
+        'base_page': base_page
+        }
+    return render(request, 'specific_problem_submission.html', context)
 
 
 @login_required
@@ -1449,3 +1637,4 @@ def multi_rejudge(request, problem_id, contest_id, user_id):
         i.contest_time = i.submit_time - start_time
 
     return render(request, 'single_user_rejudge.html', {'submit': specific_submissions, 'contest_id': specific_submissions[0].contest.pk, 'rejudge': 'hover'})
+

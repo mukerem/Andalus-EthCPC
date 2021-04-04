@@ -3,7 +3,8 @@ from django.contrib.auth.decorators import login_required
 from .forms import ClarificationRequest, ClarificationAnswer, NewClarification, EditClarification
 from .models import Clarification
 from contest.models import Contest
-from authentication.decorators import contestant_auth, admin_auth, jury_auth, admin_auth_and_clarification_exist
+from authentication.decorators import contestant_auth, admin_auth, jury_auth,\
+    admin_auth_and_clarification_exist, site_auth, site_auth_and_clarification_exist
 from django.utils import timezone
 from contest.views import refresh_contest_session_public, refresh_contest_session_admin, refresh_contest_session_contestant
 # Create your views here.
@@ -254,3 +255,155 @@ def view_jury_clarification(request):
             cla.short_answer = cla.answer
 
     return render(request, 'view_jury_clarification.html', {'all_clarification': all_clarification, 'clar': 'hover'})
+
+
+
+
+@login_required
+@site_auth
+def site_clarification_list(request):
+    refresh_contest_session_admin(request)  # refersh the contest session
+    current_contest_id = request.session.get('active_contest_admin')
+    try:
+        current_contest = Contest.objects.get(
+            pk=current_contest_id, active_time__lte=timezone.now(), enable=True)
+    except Contest.DoesNotExist:
+        current_contest = None
+
+    all_clarification = Clarification.objects.filter(
+        contest=current_contest, status=False).order_by('send_time').reverse()
+    for cla in all_clarification:
+        if len(cla.question) > 100:
+            cla.short_question = cla.question[:100] + '...'
+        else:
+            cla.short_question = cla.question
+    return render(request, 'site_clarification_list.html', {'all_clarification': all_clarification, 'clar': 'hover'})
+
+
+@login_required
+@site_auth_and_clarification_exist
+def site_clarification_answer(request, clarification_id):
+
+    clarification = Clarification.objects.get(pk=clarification_id)
+    all_clarification = Clarification.objects.filter(
+        contest=clarification.contest, status=False).order_by('send_time').reverse()
+    for cla in all_clarification:
+        if len(cla.question) > 100:
+            cla.short_question = cla.question[:100] + '...'
+        else:
+            cla.short_question = cla.question
+    if clarification.problem:
+        initial_info = {"_pro": clarification.problem.title,
+                        "_user": clarification.user,   "_question": clarification.question}
+    else:
+        initial_info = {"_pro": "General", "_user": clarification.user,
+                        "_question": clarification.question}
+
+    if request.method == "POST":
+        form = ClarificationAnswer(
+            request.POST, instance=clarification, initial=initial_info)
+        if form.is_valid():
+            post = form.save(commit=False)
+            if post.answer:
+                post.status = True
+            post.save()
+            return redirect('site_clarification_list')
+    else:
+        form = ClarificationAnswer(
+            instance=clarification, initial=initial_info)
+
+    return render(request, 'site_clarification_answer.html', {'form': form, 'all_clarification': all_clarification, 'this_clarification_id': clarification.id, 'clar': 'hover'})
+
+
+@login_required
+@site_auth
+def site_new_clarification_by_admin(request):
+    refresh_contest_session_admin(request)  # refersh the contest session
+    current_contest_id = request.session.get('active_contest_admin')
+    try:
+        current_contest = Contest.objects.get(
+            pk=current_contest_id, active_time__lte=timezone.now(), enable=True)
+    except Contest.DoesNotExist:
+        current_contest = None
+
+    if request.method == "POST":
+        form = NewClarification(request.POST)
+        form.fields['user'].queryset = current_contest.user.filter(
+            role__short_name='contestant').order_by('name')
+        form.fields['problem'].queryset = current_contest.problem.all().order_by(
+            'title')
+        if form.is_valid():
+            post = form.save(commit=False)
+            post.contest = current_contest
+            post.question = "new clarification from site admin"
+            post.send_time = timezone.now()
+            if request.POST['user'] and post.is_public:
+                post.is_public = False
+
+            post.status = True
+            post.save()
+            return redirect('site_clarification_list')
+    else:
+        form = NewClarification()
+        form.fields['user'].queryset = current_contest.user.filter(
+            role__short_name='contestant').order_by('name')
+        form.fields['problem'].queryset = current_contest.problem.all().order_by(
+            'title')
+    return render(request, 'site_new_clarification.html', {'form': form, 'clar': 'hover'})
+
+
+@login_required
+@site_auth
+def site_answered_clarification(request):
+    refresh_contest_session_admin(request)  # refersh the contest session
+    current_contest_id = request.session.get('active_contest_admin')
+    try:
+        current_contest = Contest.objects.get(
+            pk=current_contest_id, active_time__lte=timezone.now(), enable=True)
+    except Contest.DoesNotExist:
+        current_contest = None
+
+    all_clarification = Clarification.objects.filter(
+        contest=current_contest, status=True).order_by('send_time').reverse()
+    for cla in all_clarification:
+        if len(cla.question) > 60:
+            cla.short_question = cla.question[:60] + '...'
+        else:
+            cla.short_question = cla.question
+        if len(cla.answer) > 60:
+            cla.short_answer = cla.answer[:60] + '...'
+        else:
+            cla.short_answer = cla.answer
+    return render(request, 'site_answered_clarification_list.html', {'all_clarification': all_clarification, 'clar': 'hover'})
+
+
+@login_required
+@site_auth_and_clarification_exist
+def site_edit_clarification(request, clarification_id):
+
+    clarification = Clarification.objects.get(pk=clarification_id)
+    if clarification.user:
+        user = clarification.user.username
+    else:
+        user = None
+
+    if clarification.problem:
+        initial_info = {"_pro": clarification.problem.title,
+                        "_question": clarification.question, "_user": user}
+    else:
+        initial_info = {"_pro": "General",
+                        "_question": clarification.question, "_user": user}
+
+    if request.method == "POST":
+        form = EditClarification(
+            request.POST, instance=clarification, initial=initial_info)
+        if form.is_valid():
+            post = form.save(commit=False)
+            if post.answer:
+                post.status = True
+            post.save()
+            return redirect('site_clarification_list')
+    else:
+        form = EditClarification(instance=clarification, initial=initial_info)
+
+    return render(request, 'site_edit_clarification.html', {'form': form, 'clar': 'hover'})

@@ -47,7 +47,6 @@
        </ul>
         <div class="title">contestant user</div>
         <div class="title">public user</div>
-        <div class="title">admin user</div>
         <div class="title">jury user</div>
 
     </div>
@@ -109,6 +108,36 @@
             <a class = "btn btn-outline-info" href="{% url 'generate_user_password' 'public' %}" style="margin:2em 0 2em 0;">Generate Password</a>
         </div>
 
+
+        <div class="item">
+            <div class="card">
+                <table>
+                    <tr>
+                        <td> <strong>No. </strong></td>
+                        <td> <strong>User Name </strong></td>
+                        <td> <strong>Full Name </strong></td>
+                        <td> <strong>E-Mail </strong></td>
+                        <td> <strong>Campus </strong></td>
+                        <td> <strong>Rating </strong></td>
+                    </tr>
+                    <tr>
+                    {% for i in jury_user %}
+                        <tr>
+                            <td>{{forloop.counter}}</td>
+                            <td><a href="{% url 'edit_user' i.id %}">{{i.username}}</a></td>
+                            <td>{{i.name}}</td>
+                            <td>{{i.email}}</td>
+                            <td>{{i.campus}}</td>
+                            <td>{{i.rating}}</td>
+                        </tr>
+                    {% endfor %}
+                    </tr>
+                </table>
+            </div>
+            <a class = "btn btn-outline-info" href="{% url 'generate_user_password' 'jury' %}" style="margin:2em 0 2em 0;">Generate Password</a>
+        </div>
+
+        
         <div class="item">
             <div class="card">
                 <table>
@@ -137,7 +166,7 @@
             <a class = "btn btn-outline-info" href="{% url 'generate_user_password' 'admin' %}" style="margin:2em 0 2em 0;">Generate Password</a>
         </div>
 
-
+        
         <div class="item">
             <div class="card">
                 <table>
@@ -150,7 +179,7 @@
                         <td> <strong>Rating </strong></td>
                     </tr>
                     <tr>
-                    {% for i in jury_user %}
+                    {% for i in site_admin_user %}
                         <tr>
                             <td>{{forloop.counter}}</td>
                             <td><a href="{% url 'edit_user' i.id %}">{{i.username}}</a></td>
@@ -163,7 +192,7 @@
                     </tr>
                 </table>
             </div>
-            <a class = "btn btn-outline-info" href="{% url 'generate_user_password' 'jury' %}" style="margin:2em 0 2em 0;">Generate Password</a>
+            <a class = "btn btn-outline-info" href="{% url 'generate_user_password' 'site' %}" style="margin:2em 0 2em 0;">Generate Password</a>
         </div>
     </div>
 </div>

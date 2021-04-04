@@ -23,5 +23,8 @@ urlpatterns = [
     path('campus-register/', views.campus_register, name='campus_register'),
     path('generate-password/<str:role_type>/', views.generate_user_password, name='generate_user_password'),
     path('generate-password-done/<str:role_id>/', views.generate_password_done, name='generate_password_done'),
+    path('rating/', views.rating, name='rating'),
+    path('ranklists/', views.ranklists, name='ranklists'),
+    path('leaderboard/', views.leaderboard, name='leaderboard'),
 
 ]

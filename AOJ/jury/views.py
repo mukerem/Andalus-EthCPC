@@ -4,7 +4,7 @@ from contest.models import Contest
 from authentication.models import User
 from competitive.models import Submit
 from django.contrib.auth.decorators import login_required
-from authentication.decorators import jury_auth, jury_auth_and_contest_exist
+from authentication.decorators import jury_auth, jury_auth_and_contest_exist, site_or_jury_auth
 from django.utils import timezone
 
 
@@ -35,7 +35,9 @@ def jury_contest_list(request):
     total_contest = Contest.objects.all().order_by('start_time').reverse()
     now = timezone.now()
     for contest in total_contest:
-        if now < contest.active_time:
+        if contest.enable == False:
+            contest.status = "disable"
+        elif now < contest.active_time:
             contest.status = "not active"
         elif now < contest.start_time:
             contest.status = "active"
@@ -54,7 +56,9 @@ def jury_contest_detail(request, contest_id):
     total_contest = Contest.objects.all().order_by('start_time').reverse()
     now = timezone.now()
     for contest in total_contest:
-        if now < contest.active_time:
+        if contest.enable == False:
+            contest.status = "disable"
+        elif now < contest.active_time:
             contest.status = "not active"
         elif now < contest.start_time:
             contest.status = "active"

@@ -15,7 +15,8 @@ from zipfile import ZipFile, BadZipFile
 from io import BytesIO
 from django.db import IntegrityError
 from contest.models import Contest
-from public.views import create_statistics
+from public.models import Statistics
+from competitive.models import Submit
 
 @login_required
 @admin_auth
@@ -33,8 +34,8 @@ def addProblem(request):
             post.pdf = request.FILES.get('pdf')
             post.save()
 
-            if post.is_public:
-                create_statistics(post) # create statistics for this problem
+            # if post.is_public:
+            create_statistics(post) # create statistics for this problem
 
             messages.success(request, "problem "+post.title+" was added successfully.")
             return redirect('testcase', post.pk)
@@ -62,8 +63,10 @@ def addProblemZIP(request):
 @login_required
 @admin_auth_and_problem_exist
 def edit_problem(request, problem_id):
+
     problem = Problem.objects.get(pk=problem_id)
     problem_pdf_path = problem.pdf.path
+    old_stats = problem.is_public
     if request.method == "POST":
         form = EditProblem(request.POST, request.FILES, instance=problem)
         if form.is_valid():
@@ -71,9 +74,15 @@ def edit_problem(request, problem_id):
             if request.FILES.get('pdf'):
                 os.system('rm '+problem_pdf_path) 
             post.save()
-            if post.is_public:
-                create_statistics(post) # create statistics for this problem
-
+            # if post.is_public:
+            create_statistics(post) # create statistics for this problem
+            if old_stats and not post.is_public:
+                try:
+                    stat = Statistics.objects.get(problem=problem)
+                    stat.is_active = False
+                    stat.save()
+                except Statistics.DoesNotExist:
+                    pass
             messages.success(request, "The problem "+problem.title+" was update successfully.") 
             return redirect('testcase', problem_id)    
                 
@@ -234,6 +243,12 @@ def handle_zip_file(request, problem_zip):
                 ballon = '#' + ballon.replace('#', '')
             except KeyError:
                 ballon = "#ffffff"
+            
+            try:
+                public = info_map['public']
+            except KeyError:
+                public = False
+
             try:
                 short_name = info_map['short_name']
                 if len(short_name)>10:
@@ -283,13 +298,13 @@ def handle_zip_file(request, problem_zip):
             except KeyError:
                 error = 0.0
             try:
-                problem = Problem(title=title, short_name=short_name, time_limit=time_limit, memory_limit=memory_limit, ballon=ballon, error=error)  
+                problem = Problem(title=title, short_name=short_name, time_limit=time_limit, memory_limit=memory_limit, ballon=ballon, is_public=public, error=error)  
                 problem.save()
                 problem.pdf = _pro
                 problem.save()
 
-                if problem.is_public:
-                    create_statistics(post.problem) # create statistics for this problem
+                # if problem.is_public:
+                create_statistics(problem) # create statistics for this problem
 
                 messages.success(request, "problem "+problem.title+" was added successfully.")
                 sample_test_case(request, zip, problem)   
@@ -305,6 +320,40 @@ def handle_zip_file(request, problem_zip):
         return redirect('add_problem_zip')
 
 
+
+
+
+def update_statistics(submit):
+    try:
+        stat = Statistics.objects.get(problem=submit.problem)
+    except Statistics.DoesNotExist:
+        stat = Statistics(problem=submit.problem)
+        stat.save()
+
+    stat.total_submissions += 1
+    if submit.result == "Correct":
+        stat.accurate_submissions += 1
+    previous = Submit.objects.filter(user=submit.user, problem=submit.problem).exclude(pk=submit.pk)
+    if not previous:
+        stat.total_users += 1
+        if submit.result == "Correct":
+            stat.accurate_users += 1
+    else:
+        if submit.result == "Correct":
+            if not previous.filter(result="Correct"):
+                stat.accurate_users += 1
+    stat.save()
+    
+
+
+def create_statistics(problem):
+    try:
+        problem = Statistics(problem=problem)
+        problem.save()
+    except IntegrityError:
+        pass
+
+
 # @login_required
 # @contestant_auth
 # def contestant_problem_view(request):
@@ -313,3 +362,9 @@ def handle_zip_file(request, problem_zip):
 #     if all_contests:
 #         problem = all_contests[0].problem
 #     return render(request, 'all_problems.html', {'problem': problem})
+
+
+# def statistics_first_time():
+    # all_submit = Submit.objects.filter(user__role__short_name="contestant")
+    # for i in all_submit:
+    #     update_statistics(i)

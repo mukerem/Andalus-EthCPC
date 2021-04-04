@@ -6,23 +6,9 @@
 {% load js %} 
 
 <style>
-
-    button {
-        background-color: gray;
-        border: 0;
-        border-radius: 4px;
-        padding: 8px 24px;
-        font-size: 18px;
-        color: #FFFFFF;
-        cursor: pointer;
-    }
-
-    button:focus {
-        outline: none;
-    }
-
-    button:hover {
-        background: rgb(214, 85, 89);
+    .dropzone .dz-clickable {
+        display: flex;
+        align-items: center;
     }
 
     [class^="popup"] {
@@ -82,21 +68,212 @@
 <script src="{% static 'ace-builds/src/mode-javascript.js' %}" type="text/javascript" charset="utf-8"> </script>
 
 
-<div>
+
+<style>
+    .wrapper-2 {
+        width: 70%;
+        margin: 0 auto;
+    }
+
+    .cu-form-group {
+        align-items: flex-end;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        margin-bottom: 2.4em;
+        /* width: 100%; */
+    }
+    .cu-submit-btn {
+        height: 3em;
+        padding: 0 4em !important;
+        background-color: #0275d8 !important;
+    }
+
+    .cu-submit-btn:hover {
+        background-color: #0275d8 !important;
+    }
+
+    .cu-btn {
+        background-color: #0275d8 ;
+        padding: 0.6em 3em;
+        font-size: 1em;
+        margin-bottom: 1em;
+        border: 0;
+        border-radius: 0.2em;
+        color: #FFF;
+        cursor: pointer;
+        outline: none;
+    }
+
+    .submission-editor {
+        display: none;
+    }
+
+    .editor-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    #editor-theme {
+        display: none;
+    }
+
+    .file-upload {
+        background-color: #EFEFEF;
+        padding: 1.6em 2em;
+        margin-bottom: 2em;
+        border-radius: 0.4em;
+    }
+
+    .ace_editor {
+        height: 40em !important;
+        font-size: 1.3em;
+        border-radius: 0.3em;
+        border: 0.1em solid #EEE;
+    }
+
+    @media (max-width: 768px) {
+        .cu-form-group {
+            width: 100%;
+        }
+    }
+
+    .wrapper-2 .content {
+        border-top: 0.2em solid #EDEDED;
+        padding-top: 1.2em;
+        margin-top: 0.8em;
+    }
+
+    .cu-form-group-2 .cu-form-control:nth-child(2),
+    .cu-form-group-2 .cu-form-control:nth-child(3) {
+        width: 15em;
+        display: inline-block;
+        margin-right: 2em;
+    }
+    
+    .cu-form-group-2 .cu-form-control select {
+        width: 100%;
+        height: 3em;
+    }
+
+</style>
+
+
+
+<div class="wrapper-2">
 
     {% if request.session.start_contest_contestant %}
-    <form method="POST" enctype="multipart/form-data">
-        {% csrf_token %}
-        <table class="">
-            <tr>
+    <div class="file-upload">
+        <form method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="cu-form-group">
                 {% for field in form.visible_fields %}
-                <td style="vertical-align: middle;"><strong>{{ field.label|upper }}</strong></td>
-                <td>{{field}}</td>
+                    <div class="cu-form-control">
+                        <label>{{ field.label|upper }}</label>
+                        <div class="cu-input">{{field}}</div>   
+                    </div>
                 {% endfor %}
-                <td> <input type="submit" name="submit"></td>
-            </tr>
-        </table>
-    </form>
+                <input type="submit" name="submit" value="Submit" class="cu-submit-btn">
+            </div>
+        </form>
+    </div>
+
+    <!---------------------------------------------->
+    <div class="editor-nav">
+        <button type="button" id="editor-btn" class="cu-btn">Open editor</button>
+        <select id="editor-theme" name="editor-theme">
+            <option value="chrome">Chrome</option>
+            <option value="dracula">Dracula</option>
+            <option value="github">GitHub</option>
+            <option value="monokai" selected>Monokai</option>
+            <option value="terminal">Terminal</option>
+            <option value="twilight">Twilight</option>
+            <option value="xcode">Xcode</option>
+        </select>
+    </div>
+    <div class="submission-editor">
+        <form  method="POST" id="source-submit"  action="{% url 'public_submit_editor' %}">
+            {% csrf_token %}
+            <div class="cu-form-group-2">
+                {% for field in form1.visible_fields %}  
+                    <div class="cu-form-control">
+                        <label>{{ field.label|upper }}</label>
+                        <div class="cu-input">{{field}}</div>   
+                    </div>
+                {% endfor %}
+                <input type="submit"  name="submit2" value="Submit" class="cu-submit-btn">
+            </div>
+        </form>
+
+        <script src="{% static 'ace-builds/src/ace.js' %}" type="text/javascript" charset="utf-8"> </script>
+        <script src="{% static 'ace-builds/src/theme-twilight.js' %}" type="text/javascript" charset="utf-8"> </script>
+        <script src="{% static 'ace-builds/src/mode-javascript.js' %}" type="text/javascript" charset="utf-8"> </script>
+        
+        <script>   
+            let editor_button = document.querySelector("#editor-btn");
+            let submission_editor = document.querySelector(".submission-editor");
+            let editor_opened = false;
+            let source_editor = ace.edit("id_source");
+            let textarea = document.querySelector(".ace_editor textarea");
+
+
+            textarea.setAttribute("id", "id_source");
+            textarea.setAttribute("name", "source");
+
+
+            let file_upload = document.querySelector(".file-upload");
+
+            let theme = document.querySelector("#editor-theme");
+
+            theme.addEventListener("change", () => {
+                source_editor.setTheme(`ace/theme/${theme.value}`);
+            });
+
+            editor_button.addEventListener("click", () => {
+                if(editor_opened) {
+                    submission_editor.style.display = "none";
+                    editor_button.textContent = "Open editor";
+                    file_upload.style.opacity = "1";
+                    file_upload.style["pointer-events"] = "auto";
+                    theme.style.display = "none"; 
+                    editor_opened = false;
+                } else {
+                    submission_editor.style.display = "block";
+                    editor_button.textContent = "Close editor";
+                    file_upload.style.opacity = "0.3";
+                    file_upload.style["pointer-events"] = "none";
+                    theme.style.display = "block";
+                    editor_opened = true;
+                }
+            })
+
+            let language = document.querySelectorAll("select#id_language")[1];
+            let lang = 2;
+
+            let languages = ['python', 'python', 'java', 'c_cpp', 'c_cpp'];
+
+            language.addEventListener('change', () => {
+                lang = parseInt(language.value);
+                source_editor.session.setMode(`ace/mode/${languages[lang-1]}`);
+            });
+            
+            source_editor.setTheme(`ace/theme/${theme.value}`);
+            // var JavaScriptMode = ace.require("ace/mode/javascript").Mode;
+            // editor.session.setMode(new JavaScriptMode());
+            // var lang = {{language_mode | js}};
+            source_editor.session.setMode(`ace/mode/${languages[lang-1]}`);
+
+            let source_submit = document.querySelector("#source-submit");
+            source_submit.addEventListener("submit", function() {
+                textarea.value = source_editor.getSession().getValue();
+            })
+
+        </script>
+    </div>
+
+    <!--------------------------------------------------------->
 
     {% elif request.session.active_contest_contestant %}
     <div>
@@ -107,7 +284,7 @@
         <h5 class="ur-card-title" style="font-size: 2em;">There is no active contest</h5>
     </div>
     {% endif %}
-    <div class="col-sm-8 col-centered">
+    <div class="content">
         {% if all_current_contest_submits %}
         <table class="table" >
             <thead class="thead-dark">
@@ -179,7 +356,7 @@
             });
         }
         
-        $("#id_submit_file").change(function () {
+        document.querySelector("#id_submit_file").onchange = function () {
             
             var langage_selector = null;
             var file = document.getElementById("id_submit_file").value;
@@ -269,7 +446,7 @@
             }
          
             
-        });
+        }
     </script>
     
 

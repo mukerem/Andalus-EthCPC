@@ -39,6 +39,14 @@
            "short_name": "public"
         }
     },
+    {
+        "model": "authentication.Role",
+        "pk": 6,
+        "fields": {
+            "role": "Site Adminstrative User",
+           "short_name": "site"
+        }
+    },
     
     {
        "model": "authentication.Campus",

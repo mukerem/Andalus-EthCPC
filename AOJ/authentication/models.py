@@ -1,4 +1,3 @@
-
 from django.utils.safestring import mark_safe
 from django.core.exceptions  import ValidationError
 from django.core.validators import RegexValidator, MinValueValidator
@@ -34,29 +33,29 @@ countries_dict = {
     'Afghanistan': 'AFG', 'Albania': 'ALB', 'Algeria': 'DZA', 'American': 'ASM', 'Andorra': 'AND', 'Angola': 'AGO', 'Anguilla': 'AIA', 'Antarctica': 'ATA',
     'Antigua': 'ATG', 'Argentina': 'ARG', 'Armenia': 'ARM', 'Aruba': 'ABW', 'Australia': 'AUS', 'Austria': 'AUT', 'Azerbaijan': 'AZE', 'Bahamas,': 'BHS', 'Bahrain': 'BHR', 
     'Bangladesh': 'BGD', 'Barbados': 'BRB', 'Belarus': 'BLR', 'Belgium': 'BEL', 'Belize': 'BLZ', 'Benin': 'BEN', 'Bermuda': 'BMU', 'Bhutan': 'BTN', 'Bolivia': 'BOL',
-    'Bosnia': 'BIH', 'Botswana': 'BWA', 'Bouvet': 'BVT', 'Brazil': 'BRA', 'British': 'IOT', 'British': 'VGB', 'Brunei': 'BRN', 'Bulgaria': 'BGR', 'Burkina': 'BFA',
+    'Bosnia': 'BIH', 'Botswana': 'BWA', 'Bouvet': 'BVT', 'Brazil': 'BRA', 'British': 'VGB', 'Brunei': 'BRN', 'Bulgaria': 'BGR', 'Burkina': 'BFA',
     'Burma': 'MMR', 'Burundi': 'BDI', 'Cambodia': 'KHM', 'Cameroon': 'CMR', 'Canada': 'CAN', 'Cape': 'CPV', 'Cayman': 'CYM', 'Central': 'CAF', 'Chad': 'TCD', 'Chile': 'CHL', 
-    'China': 'CHN', 'Christmas': 'CXR', 'Cocos': 'CCK', 'Colombia': 'COL', 'Comoros': 'COM', 'Congo,': 'COD', 'Congo,': 'COG', 'Cook': 'COK', 'Costa': 'CRI', 'Cote': 'CIV', 
+    'China': 'CHN', 'Christmas': 'CXR', 'Cocos': 'CCK', 'Colombia': 'COL', 'Comoros': 'COM', 'Congo,': 'COG', 'Cook': 'COK', 'Costa': 'CRI', 'Cote': 'CIV', 
     'Croatia': 'HRV', 'Cuba': 'CUB', 'Curacao': 'CUW', 'Cyprus': 'CYP', 'Czech': 'CZE', 'Denmark': 'DNK', 'Djibouti': 'DJI', 'Dominica': 'DMA', 'Dominican': 'DOM', 
     'East': 'TLS', 'Ecuador': 'ECU', 'Egypt': 'EGY', 'El': 'SLV', 'Equatorial': 'GNQ', 'Eritrea': 'ERI', 'Estonia': 'EST', 'Ethiopia': 'ETH', 'Falkland': 'FLK', 
-    'Faroe': 'FRO', 'Fiji': 'FJI', 'Finland': 'FIN', 'France': 'FRA', 'France,': 'FXX', 'French': 'GUF', 'French': 'PYF', 'French': 'ATF', 'Gabon': 'GAB', 'Gambia,': 'GMB', 
+    'Faroe': 'FRO', 'Fiji': 'FJI', 'Finland': 'FIN', 'France': 'FRA', 'French': 'GUF', 'Gabon': 'GAB', 'Gambia,': 'GMB', 
     'Gaza': 'PSE', 'Georgia': 'GEO', 'Germany': 'DEU', 'Ghana': 'GHA', 'Gibraltar': 'GIB', 'Greece': 'GRC', 'Greenland': 'GRL', 'Grenada': 'GRD', 'Guadeloupe': 'GLP', 
     'Guam': 'GUM', 'Guatemala': 'GTM', 'Guernsey': 'GGY', 'Guinea': 'GIN', 'Guinea-Bissau': 'GNB', 'Guyana': 'GUY', 'Haiti': 'HTI', 'Heard': 'HMD', 'Holy': 'VAT', 
     'Honduras': 'HND', 'Hong': 'HKG', 'Hungary': 'HUN', 'Iceland': 'ISL', 'India': 'IND', 'Indonesia': 'IDN', 'Iran': 'IRN', 'Iraq': 'IRQ', 'Ireland': 'IRL', 'Isle': 'IMN', 
     'Israel': 'ISR', 'Italy': 'ITA', 'Jamaica': 'JAM', 'Japan': 'JPN', 'Jersey': 'JEY', 'Jordan': 'JOR', 'Kazakhstan': 'KAZ', 'Kenya': 'KEN', 'Kiribati': 'KIR', 
-    'Korea,': 'PRK', 'Korea,': 'KOR', 'Kuwait': 'KWT', 'Kyrgyzstan': 'KGZ', 'Laos': 'LAO', 'Latvia': 'LVA', 'Lebanon': 'LBN', 'Lesotho': 'LSO', 'Liberia': 'LBR', 
+    'Korea,': 'KOR', 'Kuwait': 'KWT', 'Kyrgyzstan': 'KGZ', 'Laos': 'LAO', 'Latvia': 'LVA', 'Lebanon': 'LBN', 'Lesotho': 'LSO', 'Liberia': 'LBR', 
     'Libya': 'LBY', 'Liechtenstein': 'LIE', 'Lithuania': 'LTU', 'Luxembourg': 'LUX', 'Macau': 'MAC', 'Macedonia': 'MKD', 'Madagascar': 'MDG', 'Malawi': 'MWI', 
     'Malaysia': 'MYS', 'Maldives': 'MDV', 'Mali': 'MLI', 'Malta': 'MLT', 'Marshall': 'MHL', 'Martinique': 'MTQ', 'Mauritania': 'MRT', 'Mauritius': 'MUS', 'Mayotte': 'MYT', 
     'Mexico': 'MEX', 'Micronesia,': 'FSM', 'Moldova': 'MDA', 'Monaco': 'MCO', 'Mongolia': 'MNG', 'Montenegro': 'MNE', 'Montserrat': 'MSR', 'Morocco': 'MAR', 
-    'Mozambique': 'MOZ', 'Namibia': 'NAM', 'Nauru': 'NRU', 'Nepal': 'NPL', 'Netherlands': 'NLD', 'New': 'NCL', 'New': 'NZL', 'Nicaragua': 'NIC', 'Niger': 'NER', 
+    'Mozambique': 'MOZ', 'Namibia': 'NAM', 'Nauru': 'NRU', 'Nepal': 'NPL', 'Netherlands': 'NLD', 'New': 'NZL', 'Nicaragua': 'NIC', 'Niger': 'NER', 
     'Nigeria': 'NGA', 'Niue': 'NIU', 'Norfolk': 'NFK', 'Northern': 'MNP', 'Norway': 'NOR', 'Oman': 'OMN', 'Pakistan': 'PAK', 'Palau': 'PLW', 'Panama': 'PAN', 'Papua': 'PNG', 
     'Paraguay': 'PRY', 'Peru': 'PER', 'Philippines': 'PHL', 'Pitcairn': 'PCN', 'Poland': 'POL', 'Portugal': 'PRT', 'Puerto': 'PRI', 'Qatar': 'QAT', 'Reunion': 'REU', 
-    'Romania': 'ROU', 'Russia': 'RUS', 'Rwanda': 'RWA', 'Saint': 'BLM', 'Saint': 'SHN', 'Saint': 'KNA', 'Saint': 'LCA', 'Saint': 'MAF', 'Saint': 'SPM', 'Saint': 'VCT', 
-    'Samoa': 'WSM', 'San': 'SMR', 'Sao': 'STP', 'Saudi': 'SAU', 'Senegal': 'SEN', 'Serbia': 'SRB', 'Seychelles': 'SYC', 'Sierra': 'SLE', 'Singapore': 'SGP', 'Sint': 'SXM', 
-    'Slovakia': 'SVK', 'Slovenia': 'SVN', 'Solomon': 'SLB', 'Somalia': 'SOM', 'South': 'ZAF', 'South': 'SGS', 'South': 'SSD', 'Spain': 'ESP', 'Sri': 'LKA', 'Sudan': 'SDN', 
+    'Romania': 'ROU', 'Russia': 'RUS', 'Rwanda': 'RWA', 'Saint': 'VCT', 'Samoa': 'WSM', 'San': 'SMR', 'Sao': 'STP', 'Saudi': 'SAU', 'Senegal': 'SEN', 'Serbia': 'SRB', 
+    'Seychelles': 'SYC', 'Sierra': 'SLE', 'Singapore': 'SGP', 'Sint': 'SXM', 
+    'Slovakia': 'SVK', 'Slovenia': 'SVN', 'Solomon': 'SLB', 'Somalia': 'SOM', 'South': 'ZAF', 'Spain': 'ESP', 'Sri': 'LKA', 'Sudan': 'SDN', 
     'Suriname': 'SUR', 'Svalbard': 'SJM', 'Swaziland': 'SWZ', 'Sweden': 'SWE', 'Switzerland': 'CHE', 'Syria': 'SYR', 'Taiwan': 'TWN', 'Tajikistan': 'TJK', 'Tanzania': 'TZA', 
     'Thailand': 'THA', 'Togo': 'TGO', 'Tokelau': 'TKL', 'Tonga': 'TON', 'Trinidad': 'TTO', 'Tunisia': 'TUN', 'Turkey': 'TUR', 'Turkmenistan': 'TKM', 'Turks': 'TCA', 
-    'Tuvalu': 'TUV', 'Uganda': 'UGA', 'Ukraine': 'UKR', 'United': 'ARE', 'United': 'GBR', 'United': 'USA', 'United': 'UMI', 'Uruguay': 'URY', 'Uzbekistan': 'UZB', 
+    'Tuvalu': 'TUV', 'Uganda': 'UGA', 'Ukraine': 'UKR', 'United': 'USA', 'Uruguay': 'URY', 'Uzbekistan': 'UZB', 
     'Vanuatu': 'VUT', 'Venezuela': 'VEN', 'Vietnam': 'VNM', 'Virgin': 'VIR', 'Wallis': 'WLF', 'West': 'PSE', 'Western': 'ESH', 'Yemen': 'YEM', 'Zambia': 'ZMB', 
     'Zimbabwe': 'ZWE'
     }
@@ -92,13 +91,16 @@ class Campus(models.Model):
     
 
 class UserManager(BaseUserManager):
-    def create_user(self, username, password, name=' ', email=None, role=None):
+    def create_user(self, password,  email, username=' ', name=' ', role=None):
      
-        if not username:
-            raise ValueError('Users must have an user name')
+        if not email:
+            raise ValueError('Users must have an email')
         
         if not name:
-            raise ValueError('Users must have an name')
+            raise ValueError('Users must have a name')
+
+        if not username:
+            raise ValueError('Users must have a username')
 
         if not role:
             raise ValueError('Users must have a role')
@@ -110,32 +112,31 @@ class UserManager(BaseUserManager):
             register_date=timezone.now().date(),
         )
         user.set_password(password)
-        if email:
-            user.email=self.normalize_email(email),
+        user.email=self.normalize_email(email)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self,username, password):
+    def create_superuser(self, email, password):
         """
-        Creates and saves a superuser with the given username and password
+        Creates and saves a superuser with the given email and password
         """
         role = Role.objects.get(short_name='super')
         
         user = self.create_user(
-            username=username,
+            username = ' ',
             name=' ',
-            email=None,
+            email=email,
             password=password,
             role=role,
         )
-        
+        # user.email=self.normalize_email(email),
         user.save(using=self._db)
         return user
 
 
 class User(AbstractBaseUser):
-    username = models.CharField(verbose_name='username', max_length=255,unique=True)
-    email = models.EmailField(verbose_name='email address', max_length=255, blank=True)
+    username = models.CharField(max_length=200)
+    email = models.EmailField(verbose_name='email address', max_length=255, unique=True)
     name = models.CharField(max_length=200)
     role = models.ForeignKey(Role, on_delete=models.CASCADE)
     campus = models.ForeignKey(Campus, on_delete=models.CASCADE, default=1)
@@ -144,7 +145,7 @@ class User(AbstractBaseUser):
     register_date = models.DateField(default = now)
     objects = UserManager()
 
-    USERNAME_FIELD = 'username'
+    USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 
     def __str__(self):

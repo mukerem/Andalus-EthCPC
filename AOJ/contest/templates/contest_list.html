@@ -15,13 +15,14 @@
         <thead class="table-info">
             <tr>
                 <th ><strong>No.</strong></th>
-                <th ><strong>Title of contest</strong></th>
+                <th ><strong>title of contest</strong></th>
                 <th ><strong>active time</strong></th>
-                <th ><strong>Start time</strong></th>
+                <th ><strong>start time</strong></th>
                 <th ><strong>end time</strong></th>
                <!--  <th ><strong>frozen time</strong></th>
                 <th ><strong>unfrozen time</strong></th> -->
                 <th ><strong>deactivate time</strong></th>
+                <th ><strong>created by</strong></th>
                 <th ><strong>Status</strong></th>
 
             
@@ -37,6 +38,7 @@
                 <!--  <td >{{i.frozen_time}}</td>
                 <td >{{i.unfrozen_time}}</td> -->
                 <td >{{i.deactivate_time}}</td>
+                <td >{{i.created_by}}</td>
                 {% if i.status == "on going" %}
                     <td style="color:green;">
                         {{i.status}}

@@ -1,6 +1,6 @@
 from django.db import models
 from problem.models import Problem
-from authentication.models import User
+from authentication.models import User, Campus
 from django.utils.safestring import mark_safe
 from django.utils import timezone
 from datetime import date
@@ -19,6 +19,7 @@ class Contest(models.Model):
     deactivate_time = models.DateTimeField()
     problem = models.ManyToManyField(Problem, blank=True)
     user = models.ManyToManyField(User, blank=True, limit_choices_to={'is_active': True, 'role__short_name': 'contestant'})
+    created_by = models.ForeignKey(Campus, on_delete=models.CASCADE)
     has_value =models.BooleanField(default=False)
     is_public =models.BooleanField(default=True)
     enable = models.BooleanField(default=True)

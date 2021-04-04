@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, HttpResponse
 from django.contrib.auth.decorators import login_required
 from authentication.decorators import admin_auth, admin_auth_and_contest_exist, contestant_auth,\
-    admin_or_jury_auth, admin_jury_auth_and_contest_exist
+    admin_or_jury_auth, admin_jury_auth_and_contest_exist, site_auth, admin_site_jury_auth, admin_or_site_auth
 from .models import Contest
 from authentication.models import User
 from django.utils import timezone
@@ -30,13 +30,20 @@ def check_base_site(request):
         base = 'contestant_base_site.html'
     elif request.user.role.short_name == 'public':
         base = 'public_base_site.html'
+    elif request.user.role.short_name == 'site':
+        base = 'site_base_site.html'
     return base
 
 
 def create_contest_session_admin(request):
     now = timezone.now()
-    all_contests = Contest.objects.filter(
-        active_time__lte=now, deactivate_time__gt=now, enable=True)
+    if request.user.role.short_name == 'site':
+        all_contests = Contest.objects.filter(
+            active_time__lte=now, deactivate_time__gt=now, created_by=request.user.campus, enable=True)
+    else:
+        all_contests = Contest.objects.filter(
+            active_time__lte=now, deactivate_time__gt=now, enable=True)
+
     if all_contests:
         if all_contests[0].start_time <= now:
             request.session['start_contest_admin'] = str(all_contests[0].pk)
@@ -123,8 +130,13 @@ def create_contest_session_public(request):
 
 def refresh_contest_session_admin(request):
     now = timezone.now()
-    all_contests = Contest.objects.filter(
-        active_time__lte=now, deactivate_time__gte=now, enable=True)
+    if request.user.role.short_name == 'site':
+        all_contests = Contest.objects.filter(
+            active_time__lte=now, deactivate_time__gt=now, created_by=request.user.campus, enable=True)
+    else:
+        all_contests = Contest.objects.filter(
+            active_time__lte=now, deactivate_time__gt=now, enable=True)
+
     if 'active_contest_admin' in request.session:
         try:
             Contest.objects.get(pk=request.session.get(
@@ -317,13 +329,14 @@ def contest_list(request):
 #             cont.save()
 
 @login_required
-@admin_auth
+@admin_or_site_auth
 def addContest(request):
     refresh_contest_session_admin(request)  # refersh the contest session
     if request.method == "POST":
         form = AddContest(request.POST)
         if form.is_valid():
             post = form.save(commit=False)
+            post.created_by = request.user.campus
             post.save()
             form.save_m2m()
             # contset_session(post)
@@ -331,10 +344,16 @@ def addContest(request):
                 post.last_update = post.start_time
                 # post.last_update = post.start_time - 1 # the correct one is this in seyar shop
                 post.save()
-            return redirect('contest')
+            
+            if request.user.role.short_name == 'admin':
+                return redirect('contest')
+            elif request.user.role.short_name == 'site':
+                return redirect('site_contest_list')
     else:
         form = AddContest()
-    return render(request, 'add_contest.html', {'form': form, 'cont': 'hover'})
+    base_page = check_base_site(request)
+    
+    return render(request, 'add_contest.html', {'form': form, 'base_page': base_page, 'cont': 'hover'})
 
 
 def rank_update_unfrozen(contest):
@@ -593,7 +612,7 @@ def load_contest_in_contestant(request):
 
 
 @login_required
-@admin_or_jury_auth
+@admin_site_jury_auth
 def load_contest_in_admin(request):
     refresh_contest_session_admin(request)  # refersh the contest session
     contest_id = request.GET.get('code')
@@ -613,7 +632,7 @@ def load_contest_in_admin(request):
 
 
 def load_contest_in_public(request):
-    refresh_active_contest_public(request)  # refersh the contest session
+    refresh_contest_session_public(request)  # refersh the contest session
     contest_id = request.GET.get('code')
     request.session['active_contest_public'] = contest_id
     now = timezone.now()
@@ -625,5 +644,5 @@ def load_contest_in_public(request):
 
     request.session['current_contest_start_time'] = str(
         selected_contest.start_time)
-    request.session['current_contest_end_time'] = str(current_contest.end_time)
+    request.session['current_contest_end_time'] = str(selected_contest.end_time)
     return HttpResponse('')

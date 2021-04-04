@@ -153,6 +153,17 @@ def admin_auth_and_clarification_exist(function):
     wrap.__name__ = function.__name__
     return wrap
 
+# site user decorator
+def site_auth(function):
+    def wrap(request, *args, **kwargs):
+        if request.user.role.short_name == 'site':
+            return function(request, *args, **kwargs)
+        else:
+            return redirect('homepage')
+    wrap.__doc__ = function.__doc__
+    wrap.__name__ = function.__name__
+    return wrap
+
 
 # jury user decorator
 
@@ -265,6 +276,119 @@ def admin_or_jury_auth(function):
     return wrap
 
 
+def admin_or_site_auth(function):
+    def wrap(request, *args, **kwargs):
+        if request.user.role.short_name == 'admin' or request.user.role.short_name == 'site':
+            return function(request, *args, **kwargs)
+        else:
+            # raise PermissionDenied
+            return redirect('homepage')
+    wrap.__doc__ = function.__doc__
+    wrap.__name__ = function.__name__
+    return wrap
+
+def admin_site_jury_auth(function):
+    def wrap(request, *args, **kwargs):
+        if request.user.role.short_name == 'admin' or \
+            request.user.role.short_name == 'site' or request.user.role.short_name == 'jury':
+            return function(request, *args, **kwargs)
+        else:
+            # raise PermissionDenied
+            return redirect('homepage')
+    wrap.__doc__ = function.__doc__
+    wrap.__name__ = function.__name__
+    return wrap
+
+
+
+def site_or_jury_auth(function):
+    def wrap(request, *args, **kwargs):
+        if request.user.role.short_name == 'site' or request.user.role.short_name == 'jury':
+            return function(request, *args, **kwargs)
+        else:
+            # raise PermissionDenied
+            return redirect('homepage')
+    wrap.__doc__ = function.__doc__
+    wrap.__name__ = function.__name__
+    return wrap
+
+
+def site_auth_and_user_exist(function):
+    def wrap(request, *args, **kwargs):
+        try:
+            user = User.objects.get(pk=kwargs['user_id'])
+            if user.campus != request.user.campus:
+                return redirect('homepage')
+        except User.DoesNotExist:
+            return redirect('homepage')
+        if request.user.role.short_name == 'site':
+            return function(request, *args, **kwargs)
+        else:
+            # raise PermissionDenied
+            return redirect('homepage')
+    wrap.__doc__ = function.__doc__
+    wrap.__name__ = function.__name__
+    return wrap
+
+
+def site_auth_and_contest_exist(function):
+    def wrap(request, *args, **kwargs):
+        try:
+            contest = Contest.objects.get(pk=kwargs['contest_id'])
+            if contest.created_by != request.user.campus:
+                return redirect('homepage')
+        except Contest.DoesNotExist:
+            # raise PermissionDenied
+            return redirect('homepage')
+        if request.user.role.short_name == 'site':
+            return function(request, *args, **kwargs)
+        else:
+            # raise PermissionDenied
+            return redirect('homepage')
+    wrap.__doc__ = function.__doc__
+    wrap.__name__ = function.__name__
+    return wrap
+
+
+
+def site_auth_and_clarification_exist(function):
+    def wrap(request, *args, **kwargs):
+        try:
+            clarification = Clarification.objects.get(pk=kwargs['clarification_id'])
+            if clarification.contest.created_by != request.user.campus:
+                return redirect('homepage')
+            if clarification.contest.active_time > timezone.now() or \
+                clarification.contest.deactivate_time < timezone.now():
+                raise PermissionDenied
+        except Clarification.DoesNotExist:
+            # raise PermissionDenied
+            return redirect('homepage')
+        if request.user.role.short_name == 'site':
+            return function(request, *args, **kwargs)
+        else:
+            # raise PermissionDenied
+            return redirect('homepage')
+    wrap.__doc__ = function.__doc__
+    wrap.__name__ = function.__name__
+    return wrap
+
+
+def site_auth_and_submit_exist(function):
+    def wrap(request, *args, **kwargs):
+        try:
+            submit = Submit.objects.get(pk=kwargs['submit_id'])
+            if submit.contest.created_by != request.user.campus:
+                return redirect('homepage')
+        except Submit.DoesNotExist:
+            raise PermissionDenied
+        if request.user.role.short_name == 'site':
+            return function(request, *args, **kwargs)
+        else:
+            # raise PermissionDenied
+            return redirect('homepage')
+    wrap.__doc__ = function.__doc__
+    wrap.__name__ = function.__name__
+    return wrap
 
 # contestant participant user decorator
 
@@ -306,6 +430,41 @@ def admin_jury_auth_and_submit_exist(function):
             # raise PermissionDenied
             return redirect('homepage')
         if request.user.role.short_name == 'admin' or request.user.role.short_name == 'jury':
+            return function(request, *args, **kwargs)
+        else:
+            # raise PermissionDenied
+            return redirect('homepage')
+    wrap.__doc__ = function.__doc__
+    wrap.__name__ = function.__name__
+    return wrap
+
+
+
+def admin_site_jury_auth_and_contest_exist(function):
+    def wrap(request, *args, **kwargs):
+        try:
+            Contest.objects.get(pk=kwargs['contest_id'])
+        except Contest.DoesNotExist:
+            # raise PermissionDenied
+            return redirect('homepage')
+        if request.user.role.short_name == 'admin' or  request.user.role.short_name == 'site' or request.user.role.short_name == 'jury':
+            return function(request, *args, **kwargs)
+        else:
+            # raise PermissionDenied
+            return redirect('homepage')
+    wrap.__doc__ = function.__doc__
+    wrap.__name__ = function.__name__
+    return wrap
+
+
+def admin_site_jury_auth_and_submit_exist(function):
+    def wrap(request, *args, **kwargs):
+        try:
+            Submit.objects.get(pk=kwargs['submit_id'])
+        except Submit.DoesNotExist:
+            # raise PermissionDenied
+            return redirect('homepage')
+        if request.user.role.short_name == 'admin' or  request.user.role.short_name == 'site' or request.user.role.short_name == 'jury':
             return function(request, *args, **kwargs)
         else:
             # raise PermissionDenied

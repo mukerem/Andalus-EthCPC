@@ -12,7 +12,7 @@ class PublicUserRegistrationForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ('username', 'name', 'email', 'password1', 'password2')
+        fields = ('username', 'name', 'email', 'campus', 'password1', 'password2')
 
     def clean_password2(self):
         # Check that the two password entries match
@@ -52,10 +52,8 @@ class EditMyProfile(forms.ModelForm):
     # )
     class Meta:
         model = User
-        fields = ['username', 'name', 'email',
-                  'campus', 'rating', 'register_date']
+        fields = ['username', 'name', 'email', 'rating', 'register_date']
         widgets = {
-            'username': forms.TextInput(attrs={'readonly': True}),
             'rating': forms.TextInput(attrs={'readonly': True}),
             'register_date': forms.DateInput(attrs={'readonly': True}),
         }
@@ -63,8 +61,7 @@ class EditMyProfile(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         name = cleaned_data.get('name')
-        campus = cleaned_data.get('campus')
-        if (not name) or (not campus):
+        if (not name):
             raise forms.ValidationError("Please correct the errors below.")
 
         return cleaned_data
@@ -76,7 +73,6 @@ class EditUserProfile(forms.ModelForm):
         model = User
         exclude = ['password', 'role', 'last_login', 'is_active']
         widgets = {
-            'username': forms.TextInput(attrs={'readonly': True}),
             'register_date': forms.DateInput(attrs={'readonly': True}),
             'rating': forms.TextInput(attrs={'readonly': True}),
         }
@@ -84,9 +80,10 @@ class EditUserProfile(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         username = cleaned_data.get('username')
+        email = cleaned_data.get('email')
         name = cleaned_data.get('name')
         campus = cleaned_data.get('campus')
-        if (not username) or (not name) or (not campus):
+        if (not username) or (not name) or (not campus) or (not email):
             raise forms.ValidationError("Please correct the errors below.")
 
         return cleaned_data
@@ -103,8 +100,9 @@ class AddUser(forms.ModelForm):
         name = cleaned_data.get('name')
         role = cleaned_data.get('role')
         campus = cleaned_data.get('campus')
+        email = cleaned_data.get('email')
 
-        if (not username) or (not name) or (not role) or (not campus):
+        if (not username) or (not name) or (not role) or (not campus) or (not email):
             raise forms.ValidationError("Please correct the errors below.")
 
         return cleaned_data

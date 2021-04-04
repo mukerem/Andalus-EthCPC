@@ -7,7 +7,7 @@
 {% load widget_tweaks %}
 <div class="card" style="margin-left: 5%;  margin-right: 5%;margin-top:2%;%" >
     <div class="card-header titles" style="font-size: 18px;" > 
-	    <strong>CONTESTANT LEADERBOARD</strong> 
+	    <strong>CONTESTANT RATING</strong> 
         <ul class="object-tools" style="position: absolute;top: 60px; right: 15px;">
            <li> </li>
        </ul>    
@@ -24,7 +24,7 @@
             {% for rank, user in user_rank %}
                 <tr>
                     <td> {{rank}} </td>
-                    <td ><a href="{% url 'edit_user' user.id %}" style="text-decoration: none;">{{user.username}}</a></td>
+                    <td >{{user.username}}</td>
                     <td >{{user.name}}</td>
                     <td> {{user.campus}} </td>
                     <td> {{user.rating}} </td>
